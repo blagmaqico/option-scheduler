@@ -10,33 +10,84 @@ app.use(express.json());
 app.use(express.static(__dirname));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// ─── CONFIG ─────────────────────────────────────────────────────────────────
-// Email credentials come from Render Environment Variables (trwałe)
-// Reszta konfiguracji zapisywana do pliku (może zniknąć przy restarcie — ale
-// na free tier Render dysk JEST dostępny w /opt/render/project/src)
+// ─── CONFIG — wszystko w Render Environment Variables (trwałe przez restarty) ──
+// Zapis przez Render API: PATCH /services/{id}/env-vars
+// Odczyt: process.env.*
+
+const RENDER_API_KEY = process.env.RENDER_API_KEY || '';
+const RENDER_SERVICE_ID = process.env.RENDER_SERVICE_ID || '';
+
+// Załaduj config z env vars (trwałe) + fallback do pliku
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
 function loadConfig() {
-  let saved = {};
-  if (fs.existsSync(CONFIG_PATH)) {
-    try { saved = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch(e) {}
+  // Najpierw spróbuj z env vars (trwałe)
+  let fromEnv = {};
+  if (process.env.APP_CONFIG) {
+    try { fromEnv = JSON.parse(process.env.APP_CONFIG); } catch(e) {}
   }
+  // Fallback do pliku
+  let fromFile = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    try { fromFile = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch(e) {}
+  }
+  const base = Object.keys(fromEnv).length ? fromEnv : fromFile;
   return {
-    tickers:      saved.tickers      || [],
-    expiryDate:   saved.expiryDate   || '',
-    times:        saved.times        || ['15:30', '15:45', '16:00'],
-    schedulerOn:  saved.schedulerOn  || false,
-    // Email — najpierw env vars, potem zapisany config, potem pusty
-    emailTo:      process.env.EMAIL_TO      || saved.emailTo      || '',
-    emailUser:    process.env.EMAIL_USER    || saved.emailUser    || '',
-    emailPass:    process.env.EMAIL_PASS    || saved.emailPass    || '',
-    emailService: process.env.EMAIL_SERVICE || saved.emailService || 'gmail',
+    tickers:      base.tickers      || [],
+    expiryDate:   base.expiryDate   || '',
+    times:        base.times        || ['15:30', '15:45', '16:00'],
+    schedulerOn:  base.schedulerOn  || false,
+    emailTo:      process.env.EMAIL_TO      || base.emailTo      || '',
+    emailUser:    process.env.EMAIL_USER    || base.emailUser    || '',
+    emailPass:    process.env.EMAIL_PASS    || base.emailPass    || '',
+    emailService: process.env.EMAIL_SERVICE || base.emailService || 'gmail',
   };
 }
 
-function saveConfig(cfg) {
+async function saveConfig(cfg) {
+  // 1. Zawsze zapisz do pliku (backup)
   try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2)); } catch(e) {
-    addLog(`Zapis config: ${e.message}`, 'warn');
+    addLog(`Zapis pliku: ${e.message}`, 'warn');
+  }
+
+  // 2. Zapisz do Render Environment Variables przez API (trwałe przez restarty)
+  if (RENDER_API_KEY && RENDER_SERVICE_ID) {
+    try {
+      const appConfig = JSON.stringify({
+        tickers: cfg.tickers,
+        expiryDate: cfg.expiryDate,
+        times: cfg.times,
+        schedulerOn: cfg.schedulerOn,
+      });
+      const resp = await fetch(`https://api.render.com/v1/services/${RENDER_SERVICE_ID}/env-vars`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${RENDER_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([
+          { key: 'EMAIL_TO',      value: process.env.EMAIL_TO || cfg.emailTo || '' },
+          { key: 'EMAIL_USER',    value: process.env.EMAIL_USER || cfg.emailUser || '' },
+          { key: 'EMAIL_PASS',    value: process.env.EMAIL_PASS || cfg.emailPass || '' },
+          { key: 'EMAIL_SERVICE', value: process.env.EMAIL_SERVICE || cfg.emailService || 'gmail' },
+          { key: 'RESEND_API_KEY', value: process.env.RESEND_API_KEY || '' },
+          { key: 'RAPIDAPI_KEY',  value: process.env.RAPIDAPI_KEY || '' },
+          { key: 'RENDER_API_KEY', value: RENDER_API_KEY },
+          { key: 'RENDER_SERVICE_ID', value: RENDER_SERVICE_ID },
+          { key: 'APP_CONFIG',    value: appConfig },
+        ])
+      });
+      if (resp.ok) {
+        addLog('Config zapisany trwale w Render ENV ✓', 'ok');
+      } else {
+        const err = await resp.text();
+        addLog(`Render API: ${resp.status} ${err.slice(0,100)}`, 'warn');
+      }
+    } catch(e) {
+      addLog(`Render ENV save: ${e.message}`, 'warn');
+    }
+  } else {
+    addLog('Brak RENDER_API_KEY/SERVICE_ID — config tylko w pliku', 'warn');
   }
 }
 
@@ -338,7 +389,7 @@ app.post('/api/config', (req, res) => {
   const prev = { ...config };
   config = { ...config, ...req.body };
   if (req.body.emailPass === '••••••••') config.emailPass = prev.emailPass;
-  saveConfig(config);
+  await saveConfig(config);
   addLog('Konfiguracja zapisana ✓', 'ok');
   if (config.schedulerOn) startAllCrons(); else stopAllCrons();
   res.json({ ok: true });

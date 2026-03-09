@@ -74,6 +74,15 @@ header {
   text-transform: uppercase; color: var(--muted);
   display: flex; align-items: center; gap: 8px; margin-bottom: 20px;
 }
+.collapse-btn {
+  margin-left: auto; cursor: pointer;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 5px;
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  padding: 2px 8px; transition: all .15s;
+}
+.collapse-btn:hover { border-color: var(--a); color: var(--a); }
+.card-body { transition: all .2s; overflow: hidden; }
 .card-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--a); box-shadow: 0 0 8px var(--a); }
 
 /* GRID */
@@ -243,7 +252,8 @@ td.mid { background: var(--s2); }
 
 <!-- EMAIL CONFIG -->
 <div class="card">
-  <div class="card-title"><span class="dot"></span> Konfiguracja Email (Gmail / Outlook)</div>
+  <div class="card-title"><span class="dot"></span> Konfiguracja Email (Gmail / Outlook)<button class="collapse-btn" onclick="toggleCard('email-body',this)">▼ ZWIŃ</button></div>
+  <div id="email-body" class="card-body">
   <div style="background:rgba(255,107,53,.07);border:1px solid rgba(255,107,53,.2);border-radius:9px;padding:14px;margin-bottom:16px;font-size:12.5px;line-height:1.7;color:#ffaa88;">
     <strong style="color:var(--warn)">⚠️ Gmail:</strong> Użyj <strong>App Password</strong> zamiast zwykłego hasła.
     Idź: <em>Google Account → Security → 2-Step Verification → App passwords</em> → wygeneruj dla "Mail".
@@ -280,11 +290,13 @@ td.mid { background: var(--s2); }
     <button class="btn btn-p" onclick="saveConfig()">💾 Zapisz</button>
     <button class="btn btn-s" onclick="testEmail()">📧 Testowy email</button>
   </div>
+  </div>
 </div>
 
 <!-- TICKERS -->
 <div class="card">
-  <div class="card-title"><span class="dot"></span> Tickery</div>
+  <div class="card-title"><span class="dot"></span> Tickery<button class="collapse-btn" onclick="toggleCard('ticker-body',this)">▼ ZWIŃ</button></div>
+  <div id="ticker-body" class="card-body">
   <div class="ticker-row">
     <input type="text" id="ticker-in" placeholder="np. SPY, QQQ, AAPL..." maxlength="10"
       onkeydown="if(event.key==='Enter')addTicker()" />
@@ -297,12 +309,13 @@ td.mid { background: var(--s2); }
     <button class="btn btn-s" onclick="fetchPreview()">🔍 Podgląd danych</button>
     <button class="btn btn-w" id="btn-now" onclick="fetchNow()">⚡ Pobierz i wyślij teraz</button>
   </div>
+  </div>
 </div>
 
 <!-- SCHEDULER -->
 <div class="card">
   <div class="sched-header">
-    <div class="card-title" style="margin-bottom:0"><span class="dot"></span> Harmonogram</div>
+    <div class="card-title" style="margin-bottom:0"><span class="dot"></span> Harmonogram<button class="collapse-btn" onclick="toggleCard('sched-body',this)" style="margin-left:12px">▼ ZWIŃ</button></div>
     <div style="display:flex;align-items:center;gap:10px">
       <label class="toggle" for="tog">
         <input type="checkbox" id="tog" onchange="toggleScheduler()" />
@@ -313,6 +326,7 @@ td.mid { background: var(--s2); }
     </div>
   </div>
 
+  <div id="sched-body" class="card-body">
   <div class="times-list" id="times-list"></div>
   <button class="btn btn-s" onclick="addTime()" style="width:fit-content">+ Dodaj godzinę</button>
 
@@ -321,6 +335,7 @@ td.mid { background: var(--s2); }
     <div class="stat-item"><div class="lbl">Aktywne crony</div><div class="val" id="active-crons">—</div></div>
     <div class="stat-item"><div class="lbl">Serwer</div><div class="val">24/7 online</div></div>
     <div class="stat-item"><div class="lbl">Weekend</div><div class="val" id="weekend-val">—</div></div>
+  </div>
   </div>
 </div>
 
@@ -588,9 +603,15 @@ const collapseState = {};
 function toggleCol(ticker, side) {
   const key = ticker + '_' + side;
   collapseState[key] = !collapseState[key];
-  const area = document.getElementById('table_wrap_' + ticker);
-  if (area && area._data) {
-    area.outerHTML = buildTable(ticker, area._data, area._expiry);
+  const wrap = document.getElementById('table_wrap_' + ticker);
+  if (wrap && wrap._data) {
+    const html = buildTable(ticker, wrap._data, wrap._expiry);
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const newEl = tmp.firstElementChild;
+    newEl._data   = wrap._data;
+    newEl._expiry = wrap._expiry;
+    wrap.replaceWith(newEl);
   }
 }
 
@@ -680,6 +701,15 @@ function switchTab(id, el) {
   document.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
+}
+
+// ─── CARD COLLAPSE ────────────────────────────────────────────────────────
+function toggleCard(id, btn) {
+  const body = document.getElementById(id);
+  if (!body) return;
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '▼ ZWIŃ' : '▶ ROZWIŃ';
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────

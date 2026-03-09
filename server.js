@@ -164,6 +164,9 @@ async function fetchOptionChain(ticker, expiryDate) {
         addLog(`Sample call fields: ${Object.keys(sample).join(', ')}`, 'info');
         addLog(`lastPrice=${sample.lastPrice} last=${sample.last} bid=${sample.bid} ask=${sample.ask}`, 'info');
       }
+      // Log raw fields from first option to diagnose lastPrice
+      const sampleOpt = opts.calls?.[0] || opts.puts?.[0];
+      if (sampleOpt) addLog(`RAW opt fields: ${JSON.stringify(Object.fromEntries(Object.entries(sampleOpt).filter(([k]) => ['lastPrice','last','bid','ask','strike'].includes(k))))}`, 'info');
       const calls = selectByDelta(opts.calls || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'call');
       const puts  = selectByDelta(opts.puts  || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'put');
       addLog(`RapidAPI OK: ${ticker} $${underlyingPrice?.toFixed(2)||'?'}`, 'ok');
@@ -212,7 +215,10 @@ function selectByDelta(options, deltas, underlyingPrice, type) {
     if (d == null) d = bsDelta(opt.strike, underlyingPrice, opt.impliedVolatility, type);
     // lastPrice: use lastPrice field, fallback to regularMarketPrice
     // Yahoo Finance zwraca lastPrice jako pole opcji (ostatnia transakcja)
-    const last = opt.lastPrice ?? opt.last ?? opt.lastTradedPrice ?? null;
+    // Gdy giełda zamknięta lastPrice może być 0 lub undefined
+    const last = (opt.lastPrice && opt.lastPrice > 0) ? opt.lastPrice
+               : (opt.last && opt.last > 0) ? opt.last
+               : null;
     return { ...opt, approxDelta: Math.abs(d), lastPrice: last };
   });
 

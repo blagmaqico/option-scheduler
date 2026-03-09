@@ -1,6 +1,5 @@
 const express = require('express');
 const cron = require('node-cron');
-const nodemailer = require('nodemailer');
 const fetch = require('node-fetch');
 const moment = require('moment-timezone');
 const path = require('path');
@@ -152,26 +151,7 @@ function approximateDelta(strike, underlying, type) {
   }
 }
 
-// ─── EMAIL ───────────────────────────────────────────────────────────────────
-function createTransporter() {
-  if (config.emailService === 'gmail') {
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: { user: config.emailUser, pass: config.emailPass },
-      tls: { rejectUnauthorized: false }
-    });
-  } else {
-    return nodemailer.createTransport({
-      host: 'smtp-mail.outlook.com',
-      port: 587,
-      secure: false,
-      auth: { user: config.emailUser, pass: config.emailPass }
-    });
-  }
-}
+// ─── EMAIL (Resend API - HTTP port 443, works on Render free) ────────────────
 
 function buildEmailHtml(results, scheduledTime) {
   const now = moment().tz('Europe/Warsaw').format('DD.MM.YYYY HH:mm:ss');
@@ -235,21 +215,34 @@ function buildEmailHtml(results, scheduledTime) {
 }
 
 async function sendEmail(scheduledTime, results) {
-  if (!config.emailUser || !config.emailPass || !config.emailTo) {
-    addLog(`Brak email config — user:${!!config.emailUser} pass:${!!config.emailPass} to:${!!config.emailTo}`, 'err');
+  const resendKey = process.env.RESEND_API_KEY || config.resendApiKey;
+  if (!resendKey) {
+    addLog('Brak RESEND_API_KEY — ustaw w Render Environment', 'err');
+    return false;
+  }
+  if (!config.emailTo) {
+    addLog('Brak EMAIL_TO', 'err');
     return false;
   }
   addLog(`Wysyłam email → ${config.emailTo}`, 'info');
-  const transporter = createTransporter();
   const html = buildEmailHtml(results, scheduledTime);
   const date = moment().tz('Europe/Warsaw').format('DD.MM.YYYY');
   try {
-    await transporter.sendMail({
-      from: `"Option Scheduler" <${config.emailUser}>`,
-      to: config.emailTo,
-      subject: `📊 Option Chain ${config.tickers.join('/')} — ${scheduledTime} — ${date}`,
-      html
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'Option Scheduler <onboarding@resend.dev>',
+        to: [config.emailTo],
+        subject: `📊 Option Chain ${config.tickers.join('/')} — ${scheduledTime} — ${date}`,
+        html
+      })
     });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.message || JSON.stringify(data));
     addLog(`✅ Email wysłany → ${config.emailTo}`, 'ok');
     return true;
   } catch(e) {

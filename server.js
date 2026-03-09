@@ -385,7 +385,7 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-app.post('/api/config', (req, res) => {
+app.post('/api/config', async (req, res) => {
   const prev = { ...config };
   config = { ...config, ...req.body };
   if (req.body.emailPass === '••••••••') config.emailPass = prev.emailPass;
@@ -395,9 +395,9 @@ app.post('/api/config', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/scheduler/toggle', (req, res) => {
+app.post('/api/scheduler/toggle', async (req, res) => {
   config.schedulerOn = req.body.on;
-  saveConfig(config);
+  await saveConfig(config);
   if (config.schedulerOn) { startAllCrons(); addLog('Scheduler WŁĄCZONY ✓', 'ok'); }
   else { stopAllCrons(); addLog('Scheduler WYŁĄCZONY', 'warn'); }
   res.json({ ok: true, on: config.schedulerOn });

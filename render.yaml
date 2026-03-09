@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: option-chain-scheduler
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+    disk:
+      name: data
+      mountPath: /opt/render/project/src
+      sizeGB: 1

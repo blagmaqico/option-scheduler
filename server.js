@@ -491,11 +491,12 @@ app.get('/api/debug-option', async (req, res) => {
       chosenDate: chosenTs ? new Date(chosenTs*1000).toISOString().slice(0,10) : null,
       finalUrl,
       optionsLength: result3?.options?.length,
+      options0keys: opts ? Object.keys(opts) : [],
       callsCount: opts?.calls?.length || 0,
       putsCount: opts?.puts?.length || 0,
       allFields: sample ? Object.keys(sample) : [],
       sampleValues: sample || null,
-      rawOptionsKeys: result3 ? Object.keys(result3) : []
+      rawOptions0: opts || null
     });
   } catch(e) {
     res.json({ error: e.message });

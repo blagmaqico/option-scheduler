@@ -593,10 +593,12 @@ function buildTable(ticker, data, expiry) {
       <td class="call">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
       <td class="call">${fv(c.bid)}</td>
       <td class="call">${fv(c.ask)}</td>
+      <td class="call" style="color:var(--muted)">${fv(c.lastPrice)}</td>
       <td class="mid"><span class="dbadge">Δ${d.toFixed(2)}</span></td>
       <td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
       <td class="put">${fv(p.bid)}</td>
       <td class="put">${fv(p.ask)}</td>
+      <td class="put" style="color:var(--muted)">${fv(p.lastPrice)}</td>
     </tr>`;
   }).join('');
 
@@ -609,14 +611,14 @@ function buildTable(ticker, data, expiry) {
       <div class="opt-table-wrap">
         <table>
           <tr>
-            <th colspan="3" class="ch">CALL</th>
+            <th colspan="4" class="ch">CALL</th>
             <th class="sh">DELTA</th>
-            <th colspan="3" class="ph">PUT</th>
+            <th colspan="4" class="ph">PUT</th>
           </tr>
           <tr>
-            <th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th>
+            <th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th><th class="ch">LAST</th>
             <th class="sh"></th>
-            <th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th>
+            <th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th><th class="ph">LAST</th>
           </tr>
           ${rows}
         </table>

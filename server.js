@@ -204,12 +204,13 @@ function selectByDelta(options, deltas, underlyingPrice, type) {
   const withDelta = sorted.map(opt => {
     let d = opt.greeks?.delta;
     if (d == null) d = bsDelta(opt.strike, underlyingPrice, opt.impliedVolatility, type);
-    return { ...opt, approxDelta: Math.abs(d) };
+    // lastPrice: use lastPrice field, fallback to regularMarketPrice
+    const last = opt.lastPrice ?? opt.regularMarketPrice ?? null;
+    return { ...opt, approxDelta: Math.abs(d), lastPrice: last };
   });
 
   const result = [];
   for (const targetDelta of deltas) {
-    // Find option whose approxDelta is closest to target
     let best = null, bestDiff = Infinity;
     for (const opt of withDelta) {
       const diff = Math.abs(opt.approxDelta - targetDelta);
@@ -281,18 +282,20 @@ function buildEmailHtml(results, scheduledTime) {
     }
     html += `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
       <tr>
-        <th colspan="3" style="background:#0d1a14;color:#00c98a;padding:10px;text-align:center;border:1px solid #1f2530;">CALL</th>
+        <th colspan="4" style="background:#0d1a14;color:#00c98a;padding:10px;text-align:center;border:1px solid #1f2530;">CALL</th>
         <th style="background:#111318;color:#e8edf5;padding:10px;text-align:center;border:1px solid #1f2530;">DELTA</th>
-        <th colspan="3" style="background:#1a0d12;color:#ff4d6d;padding:10px;text-align:center;border:1px solid #1f2530;">PUT</th>
+        <th colspan="4" style="background:#1a0d12;color:#ff4d6d;padding:10px;text-align:center;border:1px solid #1f2530;">PUT</th>
       </tr>
       <tr>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">STRIKE</th>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">BID</th>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">ASK</th>
+        <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">LAST</th>
         <th style="background:#111318;padding:8px;border:1px solid #1f2530;"></th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">STRIKE</th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">BID</th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">ASK</th>
+        <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">LAST</th>
       </tr>`;
     for (const d of deltas) {
       const c = data.calls.find(x => x.targetDelta === d) || {};
@@ -302,12 +305,14 @@ function buildEmailHtml(results, scheduledTime) {
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#00c98a;font-weight:bold;">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(c.bid)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(c.ask)}</td>
+        <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#aaa;">${fv(c.lastPrice)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;background:#111318;">
           <span style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:4px;padding:2px 8px;color:#00e5a0;font-size:12px;">Δ${d.toFixed(2)}</span>
         </td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#ff4d6d;font-weight:bold;">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(p.bid)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(p.ask)}</td>
+        <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#aaa;">${fv(p.lastPrice)}</td>
       </tr>`;
     }
     html += `</table></div>`;

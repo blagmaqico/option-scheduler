@@ -8,7 +8,8 @@ const fs = require('fs');
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ─── CONFIG FILE (persists settings) ───────────────────────────────────────
 const CONFIG_PATH = path.join(__dirname, 'config.json');

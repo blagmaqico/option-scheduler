@@ -355,8 +355,7 @@ function buildEmailHtml(results, scheduledTime) {
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${c.iv ? (c.iv*100).toFixed(1)+'%' : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${c.oi != null ? c.oi.toLocaleString() : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;background:#111318;">
-          <span style="background:rgba(0,229,160,0.15);border:1px solid rgba(0,229,160,0.4);border-radius:4px;padding:2px 8px;color:#00e5a0;font-size:12px;display:block;margin-bottom:3px;">Δ${cd.toFixed(2)}</span>
-          <span style="background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.4);border-radius:4px;padding:2px 8px;color:#ff4d6d;font-size:12px;display:block;">Δ${pd.toFixed(2)}</span>
+          <span style="background:rgba(0,229,160,0.15);border:1px solid rgba(0,229,160,0.4);border-radius:4px;padding:2px 6px;color:#00e5a0;font-size:12px;display:inline-block;margin-right:3px;">Δ${cd.toFixed(2)}</span><span style="background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.4);border-radius:4px;padding:2px 6px;color:#ff4d6d;font-size:12px;display:inline-block;">Δ${pd.toFixed(2)}</span>
         </td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#ff4d6d;font-weight:bold;">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(p.bid)}</td>

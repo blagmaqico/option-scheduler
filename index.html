@@ -575,48 +575,79 @@ async function fetchPreview() {
       html += `<div style="color:var(--put);padding:10px;font-size:13px">❌ ${ticker}: ${r.error}</div>`;
     } else {
       html += buildTable(ticker, r.data, expiry);
+      storeTableData(ticker, r.data, expiry);
     }
   }
 
   area.innerHTML = html || '<div style="color:var(--muted);padding:12px">Brak danych</div>';
 }
 
+// Track collapsed state per ticker
+const collapseState = {};
+
+function toggleCol(ticker, side) {
+  const key = ticker + '_' + side;
+  collapseState[key] = !collapseState[key];
+  const area = document.getElementById('table_wrap_' + ticker);
+  if (area && area._data) {
+    area.outerHTML = buildTable(ticker, area._data, area._expiry);
+  }
+}
+
 function buildTable(ticker, data, expiry) {
   const { calls, puts, underlyingPrice } = data;
   const deltas = [0.50, 0.40, 0.30, 0.20];
   const fv = v => v != null ? '$' + Number(v).toFixed(2) : '—';
-
-  const callDeltas = [...deltas].reverse(); // [0.20, 0.30, 0.40, 0.50] — highest strike first
-  const putDeltas  = [...deltas];           // [0.50, 0.40, 0.30, 0.20] — highest strike first
+  const callDeltas = [...deltas].reverse();
+  const putDeltas  = [...deltas];
   const fiv = v => v != null ? (v*100).toFixed(1)+'%' : '—';
   const foi = v => v != null ? v.toLocaleString() : '—';
+
+  const callHidden = collapseState[ticker + '_call'];
+  const putHidden  = collapseState[ticker + '_put'];
+
+  const btnStyle = (hidden, col) => `cursor:pointer;border:1px solid ${col};background:${hidden ? col : 'transparent'};color:${hidden ? '#0a0e14' : col};border-radius:4px;font-size:9px;font-weight:700;padding:1px 7px;letter-spacing:1px;margin-left:8px;vertical-align:middle;`;
+
   const rows = deltas.map((_, i) => {
     const cd = callDeltas[i];
     const pd = putDeltas[i];
     const c = calls.find(x => x.targetDelta === cd) || {};
     const p = puts.find(x => x.targetDelta === pd) || {};
-    return `<tr>
-      <td class="call">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
-      <td class="call">${fv(c.bid)}</td>
-      <td class="call">${fv(c.ask)}</td>
-      <td class="call" style="color:var(--muted)">${fv(c.lastPrice)}</td>
-      <td class="call" style="color:var(--muted);font-size:11px">${fiv(c.iv)}</td>
-      <td class="call" style="color:var(--muted);font-size:11px">${foi(c.oi)}</td>
-      <td class="mid">
-        <span class="dbadge" style="background:rgba(0,229,160,0.15);border-color:rgba(0,229,160,0.4);color:#00e5a0;display:block;margin-bottom:4px;">Δ${cd.toFixed(2)}</span>
-        <span class="dbadge" style="background:rgba(255,77,109,0.15);border-color:rgba(255,77,109,0.4);color:#ff4d6d;display:block;">Δ${pd.toFixed(2)}</span>
+    const callCells = callHidden
+      ? `<td class="call" colspan="6" style="color:var(--muted);font-size:13px;text-align:center;letter-spacing:3px;">••••••</td>`
+      : `<td class="call">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
+         <td class="call">${fv(c.bid)}</td>
+         <td class="call">${fv(c.ask)}</td>
+         <td class="call" style="color:var(--muted)">${fv(c.lastPrice)}</td>
+         <td class="call" style="color:var(--muted);font-size:11px">${fiv(c.iv)}</td>
+         <td class="call" style="color:var(--muted);font-size:11px">${foi(c.oi)}</td>`;
+    const putCells = putHidden
+      ? `<td class="put" colspan="6" style="color:var(--muted);font-size:13px;text-align:center;letter-spacing:3px;">••••••</td>`
+      : `<td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
+         <td class="put">${fv(p.bid)}</td>
+         <td class="put">${fv(p.ask)}</td>
+         <td class="put" style="color:var(--muted)">${fv(p.lastPrice)}</td>
+         <td class="put" style="color:var(--muted);font-size:11px">${fiv(p.iv)}</td>
+         <td class="put" style="color:var(--muted);font-size:11px">${foi(p.oi)}</td>`;
+    return `<tr>${callCells}
+      <td class="mid" style="white-space:nowrap;">
+        <span class="dbadge" style="background:rgba(0,229,160,0.15);border-color:rgba(0,229,160,0.4);color:#00e5a0;display:inline-block;margin-right:4px;">Δ${cd.toFixed(2)}</span><span class="dbadge" style="background:rgba(255,77,109,0.15);border-color:rgba(255,77,109,0.4);color:#ff4d6d;display:inline-block;">Δ${pd.toFixed(2)}</span>
       </td>
-      <td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
-      <td class="put">${fv(p.bid)}</td>
-      <td class="put">${fv(p.ask)}</td>
-      <td class="put" style="color:var(--muted)">${fv(p.lastPrice)}</td>
-      <td class="put" style="color:var(--muted);font-size:11px">${fiv(p.iv)}</td>
-      <td class="put" style="color:var(--muted);font-size:11px">${foi(p.oi)}</td>
-    </tr>`;
+      ${putCells}</tr>`;
   }).join('');
 
+  const callBtn = `<button onclick="toggleCol('${ticker}','call')" style="${btnStyle(callHidden,'#00c98a')}">${callHidden ? '▶ POKAŻ' : '▼ UKRYJ'}</button>`;
+  const putBtn  = `<button onclick="toggleCol('${ticker}','put')"  style="${btnStyle(putHidden, '#ff4d6d')}">${putHidden  ? '▶ POKAŻ' : '▼ UKRYJ'}</button>`;
+
+  const subHeaders = callHidden
+    ? `<th class="ch" colspan="6" style="text-align:center;color:var(--muted);font-size:10px;">UKRYTE</th>`
+    : `<th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th><th class="ch">LAST</th><th class="ch">IV</th><th class="ch">OI</th>`;
+  const subHeadersPut = putHidden
+    ? `<th class="ph" colspan="6" style="text-align:center;color:var(--muted);font-size:10px;">UKRYTE</th>`
+    : `<th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th><th class="ph">LAST</th><th class="ph">IV</th><th class="ph">OI</th>`;
+
   return `
-    <div style="margin-bottom:24px">
+    <div id="table_wrap_${ticker}" style="margin-bottom:24px">
       <div style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">
         ${ticker} &nbsp;·&nbsp; exp ${expiry}
         ${underlyingPrice ? `&nbsp;·&nbsp; <span style="color:var(--a)">$${underlyingPrice.toFixed(2)}</span>` : ''}
@@ -624,19 +655,23 @@ function buildTable(ticker, data, expiry) {
       <div class="opt-table-wrap">
         <table>
           <tr>
-            <th colspan="6" class="ch">CALL</th>
+            <th colspan="6" class="ch">CALL ${callBtn}</th>
             <th class="sh">DELTA</th>
-            <th colspan="6" class="ph">PUT</th>
+            <th colspan="6" class="ph">PUT ${putBtn}</th>
           </tr>
-          <tr>
-            <th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th><th class="ch">LAST</th><th class="ch">IV</th><th class="ch">OI</th>
-            <th class="sh"></th>
-            <th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th><th class="ph">LAST</th><th class="ph">IV</th><th class="ph">OI</th>
-          </tr>
+          <tr>${subHeaders}<th class="sh"></th>${subHeadersPut}</tr>
           ${rows}
         </table>
       </div>
     </div>`;
+}
+
+// Store data on element after render
+function storeTableData(ticker, data, expiry) {
+  setTimeout(() => {
+    const el = document.getElementById('table_wrap_' + ticker);
+    if (el) { el._data = data; el._expiry = expiry; }
+  }, 0);
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────

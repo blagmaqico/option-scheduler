@@ -138,35 +138,42 @@ async function fetchOptionChain(ticker, expiryDate) {
   const ts = expiryDate ? Math.floor(new Date(expiryDate).getTime() / 1000) : null;
 
   if (rapidApiKey) {
-    // Use RapidAPI Yahoo Finance
     try {
       addLog(`RapidAPI fetch: ${ticker}`, 'info');
-      // Correct endpoint for options chain
-      const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}${ts ? '&date='+ts : ''}`;
-      const resp = await fetch(url, {
-        headers: {
-          'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
-          'x-rapidapi-key': rapidApiKey
-        }
-      });
-      const text = await resp.text();
-      if (!resp.ok) throw new Error(`RapidAPI HTTP ${resp.status}: ${text.slice(0,200)}`);
-      let json;
-      try { json = JSON.parse(text); } catch(e) { throw new Error(`JSON parse: ${text.slice(0,200)}`); }
-      const chain = json?.optionChain?.result?.[0];
-      if (!chain) throw new Error(`Brak option chain. Keys: ${Object.keys(json||{}).join(',')}`);
-      const opts = chain.options?.[0];
-      if (!opts) throw new Error('Brak opcji dla tej daty');
-      const underlyingPrice = chain.quote?.regularMarketPrice || null;
-      // Debug: log first call option fields to see what Yahoo returns
-      if (opts.calls?.length > 0) {
-        const sample = opts.calls[0];
-        addLog(`Sample call fields: ${Object.keys(sample).join(', ')}`, 'info');
-        addLog(`lastPrice=${sample.lastPrice} last=${sample.last} bid=${sample.bid} ask=${sample.ask}`, 'info');
+      const headers = {
+        'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
+        'x-rapidapi-key': rapidApiKey
+      };
+      const baseUrl = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}`;
+
+      // Step 1: fetch without date to get available expiration dates
+      const baseResp = await fetch(baseUrl, { headers });
+      if (!baseResp.ok) throw new Error(`RapidAPI HTTP ${baseResp.status}`);
+      const baseJson = await baseResp.json();
+      const chain0 = baseJson?.optionChain?.result?.[0];
+      if (!chain0) throw new Error('Brak danych option chain');
+
+      // Step 2: find closest available expiration date to requested date
+      const availableDates = chain0.expirationDates || [];
+      let chosenTs = availableDates[0] || null;
+      if (ts && availableDates.length > 0) {
+        chosenTs = availableDates.reduce((best, d) =>
+          Math.abs(d - ts) < Math.abs(best - ts) ? d : best
+        , availableDates[0]);
       }
-      // Log raw fields from first option to diagnose lastPrice
-      const sampleOpt = opts.calls?.[0] || opts.puts?.[0];
-      if (sampleOpt) addLog(`RAW opt fields: ${JSON.stringify(Object.fromEntries(Object.entries(sampleOpt).filter(([k]) => ['lastPrice','last','bid','ask','strike'].includes(k))))}`, 'info');
+      addLog(`Wybrana data exp: ${chosenTs ? new Date(chosenTs*1000).toISOString().slice(0,10) : 'brak'}`, 'info');
+
+      // Step 3: fetch with correct date timestamp from Yahoo
+      const finalUrl = `${baseUrl}${chosenTs ? '&date='+chosenTs : ''}`;
+      const finalResp = await fetch(finalUrl, { headers });
+      if (!finalResp.ok) throw new Error(`RapidAPI HTTP ${finalResp.status}`);
+      const finalJson = await finalResp.json();
+      const chain = finalJson?.optionChain?.result?.[0];
+      if (!chain) throw new Error('Brak danych po wyborze daty');
+      const opts = chain.options?.[0];
+      if (!opts) throw new Error('Brak opcji dla wybranej daty');
+
+      const underlyingPrice = chain.quote?.regularMarketPrice || null;
       const calls = selectByDelta(opts.calls || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'call');
       const puts  = selectByDelta(opts.puts  || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'put');
       addLog(`RapidAPI OK: ${ticker} $${underlyingPrice?.toFixed(2)||'?'}`, 'ok');

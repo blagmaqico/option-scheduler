@@ -586,11 +586,15 @@ function buildTable(ticker, data, expiry) {
   const deltas = [0.50, 0.40, 0.30, 0.20];
   const fv = v => v != null ? '$' + Number(v).toFixed(2) : '—';
 
-  const rows = deltas.map(d => {
-    const c = calls.find(x => x.targetDelta === d) || {};
-    const p = puts.find(x => x.targetDelta === d) || {};
-    const fiv = v => v != null ? (v*100).toFixed(1)+'%' : '—';
-    const foi = v => v != null ? v.toLocaleString() : '—';
+  const callDeltas = [...deltas].reverse(); // [0.20, 0.30, 0.40, 0.50] — highest strike first
+  const putDeltas  = [...deltas];           // [0.50, 0.40, 0.30, 0.20] — highest strike first
+  const fiv = v => v != null ? (v*100).toFixed(1)+'%' : '—';
+  const foi = v => v != null ? v.toLocaleString() : '—';
+  const rows = deltas.map((_, i) => {
+    const cd = callDeltas[i];
+    const pd = putDeltas[i];
+    const c = calls.find(x => x.targetDelta === cd) || {};
+    const p = puts.find(x => x.targetDelta === pd) || {};
     return `<tr>
       <td class="call">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
       <td class="call">${fv(c.bid)}</td>
@@ -598,7 +602,7 @@ function buildTable(ticker, data, expiry) {
       <td class="call" style="color:var(--muted)">${fv(c.lastPrice)}</td>
       <td class="call" style="color:var(--muted);font-size:11px">${fiv(c.iv)}</td>
       <td class="call" style="color:var(--muted);font-size:11px">${foi(c.oi)}</td>
-      <td class="mid"><span class="dbadge">Δ${d.toFixed(2)}</span></td>
+      <td class="mid"><span class="dbadge">Δ${cd.toFixed(2)}<br><span style="font-size:10px;opacity:0.6">Δ${pd.toFixed(2)}</span></span></td>
       <td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
       <td class="put">${fv(p.bid)}</td>
       <td class="put">${fv(p.ask)}</td>

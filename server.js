@@ -335,9 +335,17 @@ function buildEmailHtml(results, scheduledTime) {
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">IV</th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">OI</th>
       </tr>`;
-    for (const d of deltas) {
-      const c = data.calls.find(x => x.targetDelta === d) || {};
-      const p = data.puts.find(x => x.targetDelta === d) || {};
+    // Calls: reverse order so highest strike (lowest delta) is on top
+    // Puts: keep order so highest strike (highest delta) is on top  
+    const callDeltas = [...deltas].reverse(); // [0.20, 0.30, 0.40, 0.50]
+    const putDeltas  = [...deltas];           // [0.50, 0.40, 0.30, 0.20]
+    const rowCount = deltas.length;
+    for (let i = 0; i < rowCount; i++) {
+      const cd = callDeltas[i];
+      const pd = putDeltas[i];
+      const c = data.calls.find(x => x.targetDelta === cd) || {};
+      const p = data.puts.find(x => x.targetDelta === pd) || {};
+      const d = cd; // use call delta for badge display
       const fv = v => v != null ? '$'+Number(v).toFixed(2) : '—';
       html += `<tr>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#00c98a;font-weight:bold;">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
@@ -347,7 +355,7 @@ function buildEmailHtml(results, scheduledTime) {
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${c.iv ? (c.iv*100).toFixed(1)+'%' : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${c.oi != null ? c.oi.toLocaleString() : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;background:#111318;">
-          <span style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:4px;padding:2px 8px;color:#00e5a0;font-size:12px;">Δ${d.toFixed(2)}</span>
+          <span style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:4px;padding:2px 8px;color:#00e5a0;font-size:12px;">Δ${cd.toFixed(2)} / Δ${pd.toFixed(2)}</span>
         </td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#ff4d6d;font-weight:bold;">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(p.bid)}</td>

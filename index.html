@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option Chain Scheduler</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+
+:root {
+  --bg: #080a0d;
+  --s1: #0f1218;
+  --s2: #161b24;
+  --s3: #1c2230;
+  --border: #222a38;
+  --a: #00e5a0;
+  --a2: #0077ff;
+  --warn: #ff6b35;
+  --text: #dde4f0;
+  --muted: #4e5e78;
+  --call: #00c98a;
+  --put: #ff4d6d;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,160,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,160,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none; z-index: 0;
+}
+
+.wrap { position: relative; z-index: 1; max-width: 1060px; margin: 0 auto; padding: 36px 20px; }
+
+/* HEADER */
+header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; flex-wrap: wrap;
+  gap: 16px; margin-bottom: 40px;
+}
+
+.logo h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+.logo h1 span { color: var(--a); }
+.logo-tag { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--a); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+
+.header-right { text-align: right; }
+#live-clock { font-family: 'Space Mono', monospace; font-size: 26px; font-weight: 700; color: var(--a); letter-spacing: 2px; }
+.clock-sub { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+/* CARDS */
+.card {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; margin-bottom: 18px;
+  position: relative; overflow: hidden;
+}
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--a), var(--a2), transparent);
+}
+.card-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+  text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 20px;
+}
+.card-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--a); box-shadow: 0 0 8px var(--a); }
+
+/* GRID */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media(max-width:640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+/* FORM */
+.fg { display: flex; flex-direction: column; gap: 7px; }
+label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+input, select {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 9px; color: var(--text);
+  font-family: 'Syne', sans-serif; font-size: 14px;
+  padding: 11px 14px; outline: none;
+  transition: border-color .2s, box-shadow .2s; width: 100%;
+}
+input:focus, select:focus { border-color: var(--a); box-shadow: 0 0 0 3px rgba(0,229,160,.1); }
+input::placeholder { color: var(--muted); }
+
+/* BUTTONS */
+.btn {
+  border: none; border-radius: 9px; cursor: pointer;
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  padding: 11px 18px; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.btn-p { background: var(--a); color: #000; }
+.btn-p:hover { background: #00ffb3; box-shadow: 0 0 20px rgba(0,229,160,.35); transform: translateY(-1px); }
+.btn-s { background: var(--s2); border: 1px solid var(--border); color: var(--text); }
+.btn-s:hover { border-color: var(--a); color: var(--a); }
+.btn-w { background: rgba(255,107,53,.1); border: 1px solid rgba(255,107,53,.3); color: var(--warn); }
+.btn-w:hover { background: rgba(255,107,53,.2); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+
+/* TICKERS */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; min-height: 32px; }
+.chip {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(0,229,160,.08); border: 1px solid rgba(0,229,160,.25);
+  border-radius: 7px; padding: 5px 11px;
+  font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: var(--a);
+  animation: fi .2s ease;
+}
+.chip button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+.chip button:hover { color: var(--put); }
+.ticker-row { display: flex; gap: 9px; }
+.ticker-row input { flex: 1; text-transform: uppercase; }
+
+/* SCHEDULE */
+.sched-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+
+.toggle { position: relative; width: 50px; height: 26px; cursor: pointer; }
+.toggle input { display: none; }
+.toggle-track { position: absolute; inset: 0; background: var(--s2); border: 1px solid var(--border); border-radius: 13px; transition: all .3s; }
+.toggle input:checked + .toggle-track { background: rgba(0,229,160,.18); border-color: var(--a); }
+.toggle-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: var(--muted); border-radius: 50%; transition: all .3s; }
+.toggle input:checked ~ .toggle-thumb { left: 27px; background: var(--a); box-shadow: 0 0 10px var(--a); }
+.toggle-lbl { font-size: 13px; font-weight: 700; color: var(--muted); }
+.toggle-lbl.on { color: var(--a); }
+
+.times-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+.time-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 9px; padding: 9px 14px; animation: fi .2s ease;
+}
+.time-row input[type=time] {
+  background: transparent; border: none; color: var(--a);
+  font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700;
+  padding: 0; width: auto; flex: 1;
+}
+.time-row input[type=time]:focus { box-shadow: none; border: none; }
+.tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--s3); flex-shrink: 0; }
+.tdot.fired { background: var(--a); box-shadow: 0 0 8px var(--a); animation: pulse 2s infinite; }
+.btn-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 17px; padding: 0; }
+.btn-rm:hover { color: var(--put); }
+
+/* STATUS BAR */
+.stat-bar {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 18px; margin-top: 14px;
+  display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
+}
+.stat-item .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+.stat-item .val { font-family: 'Space Mono', monospace; font-size: 13px; color: var(--text); margin-top: 2px; }
+.val.green { color: var(--a); }
+.val.red { color: var(--put); }
+
+/* LOG */
+.log-box {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; max-height: 200px;
+  overflow-y: auto; font-family: 'Space Mono', monospace; font-size: 12px; line-height: 1.7;
+}
+.log-box::-webkit-scrollbar { width: 3px; }
+.log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.le { display: flex; gap: 10px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.03); animation: fi .3s ease; }
+.lt { color: var(--muted); flex-shrink: 0; }
+.lm.ok { color: var(--call); }
+.lm.err { color: var(--put); }
+.lm.info { color: var(--a2); }
+.lm.warn { color: var(--warn); }
+
+/* TABS */
+.tabs { display: flex; gap: 4px; background: var(--s2); border: 1px solid var(--border); border-radius: 9px; padding: 4px; width: fit-content; margin-bottom: 14px; }
+.tab { padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); border: none; background: none; font-family: 'Syne', sans-serif; transition: all .2s; }
+.tab.active { background: var(--s1); color: var(--text); border: 1px solid var(--border); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* PREVIEW TABLE */
+.opt-table-wrap { overflow-x: auto; margin-bottom: 24px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { padding: 9px 13px; text-align: center; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; border: 1px solid var(--border); }
+th.ch { color: var(--call); background: #0d1a14; }
+th.ph { color: var(--put); background: #1a0d12; }
+th.sh { color: var(--muted); background: var(--s2); }
+td { padding: 8px 13px; text-align: center; border: 1px solid var(--border); font-family: 'Space Mono', monospace; }
+tr:hover td { background: rgba(255,255,255,.02); }
+td.call { color: var(--call); }
+td.put { color: var(--put); }
+td.mid { background: var(--s2); }
+.dbadge {
+  background: rgba(0,229,160,.1); border: 1px solid rgba(0,229,160,.25);
+  border-radius: 4px; padding: 2px 7px; color: var(--a); font-size: 11px;
+}
+
+/* CONNECTION STATUS */
+.conn-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-radius: 9px; margin-bottom: 18px;
+  font-size: 13px; font-weight: 600;
+}
+.conn-bar.ok { background: rgba(0,201,138,.08); border: 1px solid rgba(0,201,138,.2); color: var(--call); }
+.conn-bar.err { background: rgba(255,77,109,.08); border: 1px solid rgba(255,77,109,.2); color: var(--put); }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.conn-bar.ok .conn-dot { background: var(--call); box-shadow: 0 0 6px var(--call); animation: pulse 2s infinite; }
+.conn-bar.err .conn-dot { background: var(--put); }
+
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(0,229,160,.3); border-top-color: var(--a); border-radius: 50%; animation: spin .8s linear infinite; }
+
+@keyframes fi { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.5 } }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo">
+    <div class="logo-tag">▸ server-side scheduler</div>
+    <h1>Option Chain <span>Monitor</span></h1>
+  </div>
+  <div class="header-right">
+    <div id="live-clock">--:--:--</div>
+    <div class="clock-sub">🇵🇱 Czas Polski (CET/CEST)</div>
+  </div>
+</header>
+
+<div id="conn-bar" class="conn-bar err">
+  <div class="conn-dot"></div>
+  <span id="conn-text">Łączenie z serwerem...</span>
+</div>
+
+<!-- EMAIL CONFIG -->
+<div class="card">
+  <div class="card-title"><span class="dot"></span> Konfiguracja Email (Gmail / Outlook)</div>
+  <div style="background:rgba(255,107,53,.07);border:1px solid rgba(255,107,53,.2);border-radius:9px;padding:14px;margin-bottom:16px;font-size:12.5px;line-height:1.7;color:#ffaa88;">
+    <strong style="color:var(--warn)">⚠️ Gmail:</strong> Użyj <strong>App Password</strong> zamiast zwykłego hasła.
+    Idź: <em>Google Account → Security → 2-Step Verification → App passwords</em> → wygeneruj dla "Mail".
+    <br><strong style="color:var(--warn)">Outlook:</strong> Zwykłe hasło konta lub App Password jeśli masz 2FA.
+  </div>
+  <div class="grid3" style="margin-bottom:14px">
+    <div class="fg">
+      <label>Serwis email</label>
+      <select id="cfg-service">
+        <option value="gmail">Gmail</option>
+        <option value="outlook">Outlook / Hotmail</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Login (adres nadawcy)</label>
+      <input type="email" id="cfg-user" placeholder="twoj@gmail.com" />
+    </div>
+    <div class="fg">
+      <label>Hasło / App Password</label>
+      <input type="password" id="cfg-pass" placeholder="••••••••••••" />
+    </div>
+  </div>
+  <div class="grid2" style="margin-bottom:14px">
+    <div class="fg">
+      <label>Email odbiorcy (do kogo wysyłać)</label>
+      <input type="email" id="cfg-to" placeholder="odbiorca@email.com" />
+    </div>
+    <div class="fg">
+      <label>Data wygasania (Expiration)</label>
+      <input type="date" id="cfg-expiry" />
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-p" onclick="saveConfig()">💾 Zapisz</button>
+    <button class="btn btn-s" onclick="testEmail()">📧 Testowy email</button>
+  </div>
+</div>
+
+<!-- TICKERS -->
+<div class="card">
+  <div class="card-title"><span class="dot"></span> Tickery</div>
+  <div class="ticker-row">
+    <input type="text" id="ticker-in" placeholder="np. SPY, QQQ, AAPL..." maxlength="10"
+      onkeydown="if(event.key==='Enter')addTicker()" />
+    <button class="btn btn-p" onclick="addTicker()">+ Dodaj</button>
+  </div>
+  <div class="chips" id="chips">
+    <span style="color:var(--muted);font-size:13px">Brak tickerów</span>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-s" onclick="fetchPreview()">🔍 Podgląd danych</button>
+    <button class="btn btn-w" id="btn-now" onclick="fetchNow()">⚡ Pobierz i wyślij teraz</button>
+  </div>
+</div>
+
+<!-- SCHEDULER -->
+<div class="card">
+  <div class="sched-header">
+    <div class="card-title" style="margin-bottom:0"><span class="dot"></span> Harmonogram</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <label class="toggle" for="tog">
+        <input type="checkbox" id="tog" onchange="toggleScheduler()" />
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+      <span class="toggle-lbl" id="tog-lbl">Wyłączony</span>
+    </div>
+  </div>
+
+  <div class="times-list" id="times-list"></div>
+  <button class="btn btn-s" onclick="addTime()" style="width:fit-content">+ Dodaj godzinę</button>
+
+  <div class="stat-bar">
+    <div class="stat-item"><div class="lbl">Następna wysyłka</div><div class="val green" id="next-fire">—</div></div>
+    <div class="stat-item"><div class="lbl">Aktywne crony</div><div class="val" id="active-crons">—</div></div>
+    <div class="stat-item"><div class="lbl">Serwer</div><div class="val">24/7 online</div></div>
+    <div class="stat-item"><div class="lbl">Weekend</div><div class="val" id="weekend-val">—</div></div>
+  </div>
+</div>
+
+<!-- LOG + PREVIEW -->
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('log',this)">📋 Log serwera</button>
+    <button class="tab" onclick="switchTab('prev',this)">📊 Podgląd danych</button>
+  </div>
+
+  <div class="tab-pane active" id="tab-log">
+    <div class="log-box" id="log-box">
+      <div class="le"><span class="lt">--:--:--</span><span class="lm info">Łączenie z serwerem...</span></div>
+    </div>
+  </div>
+
+  <div class="tab-pane" id="tab-prev">
+    <div id="prev-area" style="color:var(--muted);font-size:13px;padding:12px 0">
+      Kliknij "Podgląd danych" aby zobaczyć option chain
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+// ─── LOCAL STATE ──────────────────────────────────────────────────────────
+let tickers = [];
+let times = ['15:30', '15:45', '16:00'];
+let pollingInterval = null;
+
+// ─── CLOCK ────────────────────────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const now = new Date();
+    const pl = now.toLocaleTimeString('pl-PL', { timeZone: 'Europe/Warsaw', hour12: false });
+    document.getElementById('live-clock').textContent = pl;
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ─── API ──────────────────────────────────────────────────────────────────
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+// ─── POLL STATUS ─────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const s = await api('/api/status');
+    updateFromStatus(s);
+
+    const bar = document.getElementById('conn-bar');
+    bar.className = 'conn-bar ok';
+    document.getElementById('conn-text').textContent = `Połączono z serwerem • ${s.serverTime} (PL)`;
+  } catch(e) {
+    const bar = document.getElementById('conn-bar');
+    bar.className = 'conn-bar err';
+    document.getElementById('conn-text').textContent = 'Brak połączenia z serwerem';
+  }
+}
+
+function updateFromStatus(s) {
+  const cfg = s.config;
+
+  // Email fields (don't overwrite if user is editing)
+  if (document.activeElement.id !== 'cfg-user') document.getElementById('cfg-user').value = cfg.emailUser || '';
+  if (document.activeElement.id !== 'cfg-to') document.getElementById('cfg-to').value = cfg.emailTo || '';
+  if (document.activeElement.id !== 'cfg-expiry') document.getElementById('cfg-expiry').value = cfg.expiryDate || '';
+  document.getElementById('cfg-service').value = cfg.emailService || 'gmail';
+
+  // Tickers
+  if (JSON.stringify(tickers) !== JSON.stringify(cfg.tickers)) {
+    tickers = cfg.tickers || [];
+    renderChips();
+  }
+
+  // Times
+  if (JSON.stringify(times) !== JSON.stringify(cfg.times)) {
+    times = cfg.times || [];
+    renderTimes();
+  }
+
+  // Scheduler toggle
+  const tog = document.getElementById('tog');
+  const lbl = document.getElementById('tog-lbl');
+  tog.checked = cfg.schedulerOn;
+  lbl.textContent = cfg.schedulerOn ? 'Aktywny' : 'Wyłączony';
+  lbl.className = cfg.schedulerOn ? 'toggle-lbl on' : 'toggle-lbl';
+
+  // Active crons
+  document.getElementById('active-crons').textContent =
+    s.activeCrons.length ? s.activeCrons.join(', ') : 'brak';
+
+  // Weekend
+  const wv = document.getElementById('weekend-val');
+  if (s.isWeekend) { wv.textContent = 'Tak (pauza)'; wv.className = 'val red'; }
+  else { wv.textContent = 'Nie'; wv.className = 'val green'; }
+
+  // Next fire
+  updateNextFire(cfg.times, cfg.schedulerOn, s.serverTime);
+
+  // Logs
+  renderLogs(s.logs);
+}
+
+function updateNextFire(times, on, serverTime) {
+  const el = document.getElementById('next-fire');
+  if (!on || !times || !times.length) { el.textContent = '—'; return; }
+
+  const [sh, sm, ss] = serverTime.split(':').map(Number);
+  const nowMins = sh * 60 + sm;
+  const sorted = [...times].sort();
+
+  let next = sorted.find(t => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m > nowMins;
+  });
+
+  el.textContent = next ? `Dziś o ${next}` : `Jutro o ${sorted[0]}`;
+}
+
+function renderLogs(logs) {
+  const box = document.getElementById('log-box');
+  const wasAtBottom = box.scrollTop >= box.scrollHeight - box.clientHeight - 30;
+  box.innerHTML = logs.map(l =>
+    `<div class="le"><span class="lt">${l.time}</span><span class="lm ${l.type}">${l.msg}</span></div>`
+  ).join('');
+  if (wasAtBottom) box.scrollTop = box.scrollHeight;
+}
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────
+async function saveConfig() {
+  const body = {
+    emailService: document.getElementById('cfg-service').value,
+    emailUser: document.getElementById('cfg-user').value.trim(),
+    emailPass: document.getElementById('cfg-pass').value || '••••••••',
+    emailTo: document.getElementById('cfg-to').value.trim(),
+    expiryDate: document.getElementById('cfg-expiry').value,
+    tickers,
+    times
+  };
+  await api('/api/config', 'POST', body);
+  document.getElementById('cfg-pass').value = '';
+  await pollStatus();
+}
+
+async function testEmail() {
+  await saveConfig();
+  const btn = event.target;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Wysyłam...';
+  const r = await api('/api/test-email', 'POST');
+  btn.disabled = false; btn.textContent = r.ok ? '✅ Wysłano!' : '❌ Błąd — sprawdź log';
+  setTimeout(() => btn.textContent = '📧 Testowy email', 3000);
+}
+
+// ─── TICKERS ─────────────────────────────────────────────────────────────
+function addTicker() {
+  const inp = document.getElementById('ticker-in');
+  const v = inp.value.trim().toUpperCase();
+  if (!v || tickers.includes(v)) return;
+  tickers.push(v); inp.value = '';
+  renderChips(); saveConfig();
+}
+
+function removeTicker(t) {
+  tickers = tickers.filter(x => x !== t);
+  renderChips(); saveConfig();
+}
+
+function renderChips() {
+  const el = document.getElementById('chips');
+  if (!tickers.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px">Brak tickerów</span>'; return; }
+  el.innerHTML = tickers.map(t =>
+    `<div class="chip">${t}<button onclick="removeTicker('${t}')">×</button></div>`
+  ).join('');
+}
+
+// ─── TIMES ────────────────────────────────────────────────────────────────
+function addTime() {
+  times.push('09:00'); renderTimes(); saveConfig();
+}
+
+function removeTime(i) {
+  times.splice(i, 1); renderTimes(); saveConfig();
+}
+
+function changeTime(i, v) {
+  times[i] = v; saveConfig();
+}
+
+function renderTimes() {
+  const el = document.getElementById('times-list');
+  if (!times.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">Brak godzin</div>'; return; }
+  el.innerHTML = times.map((t, i) => `
+    <div class="time-row">
+      <div class="tdot" id="tdot-${i}"></div>
+      <input type="time" value="${t}" onchange="changeTime(${i}, this.value)" />
+      <span style="color:var(--muted);font-size:12px;flex:1">pon–pt • Europe/Warsaw</span>
+      <button class="btn-rm" onclick="removeTime(${i})">×</button>
+    </div>
+  `).join('');
+}
+
+// ─── SCHEDULER TOGGLE ────────────────────────────────────────────────────
+async function toggleScheduler() {
+  const on = document.getElementById('tog').checked;
+  await api('/api/scheduler/toggle', 'POST', { on });
+  await pollStatus();
+}
+
+// ─── FETCH NOW ────────────────────────────────────────────────────────────
+async function fetchNow() {
+  await saveConfig();
+  const btn = document.getElementById('btn-now');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Pobieram...';
+  const r = await api('/api/fetch-now', 'POST');
+  btn.disabled = false; btn.textContent = '⚡ Pobierz i wyślij teraz';
+  await pollStatus();
+}
+
+// ─── PREVIEW ─────────────────────────────────────────────────────────────
+async function fetchPreview() {
+  if (!tickers.length) return;
+  await saveConfig();
+
+  // Switch tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.getElementById('tab-prev').classList.add('active');
+
+  const area = document.getElementById('prev-area');
+  area.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)"><span class="spinner"></span> Pobieranie...</div>';
+
+  const expiry = document.getElementById('cfg-expiry').value;
+  let html = '';
+
+  for (const ticker of tickers) {
+    const r = await api('/api/preview', 'POST', { ticker, expiryDate: expiry });
+    if (!r.ok) {
+      html += `<div style="color:var(--put);padding:10px;font-size:13px">❌ ${ticker}: ${r.error}</div>`;
+    } else {
+      html += buildTable(ticker, r.data, expiry);
+    }
+  }
+
+  area.innerHTML = html || '<div style="color:var(--muted);padding:12px">Brak danych</div>';
+}
+
+function buildTable(ticker, data, expiry) {
+  const { calls, puts, underlyingPrice } = data;
+  const deltas = [0.50, 0.40, 0.30, 0.20];
+  const fv = v => v != null ? '$' + Number(v).toFixed(2) : '—';
+
+  const rows = deltas.map(d => {
+    const c = calls.find(x => x.targetDelta === d) || {};
+    const p = puts.find(x => x.targetDelta === d) || {};
+    return `<tr>
+      <td class="call">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
+      <td class="call">${fv(c.bid)}</td>
+      <td class="call">${fv(c.ask)}</td>
+      <td class="mid"><span class="dbadge">Δ${d.toFixed(2)}</span></td>
+      <td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
+      <td class="put">${fv(p.bid)}</td>
+      <td class="put">${fv(p.ask)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="margin-bottom:24px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">
+        ${ticker} &nbsp;·&nbsp; exp ${expiry}
+        ${underlyingPrice ? `&nbsp;·&nbsp; <span style="color:var(--a)">$${underlyingPrice.toFixed(2)}</span>` : ''}
+      </div>
+      <div class="opt-table-wrap">
+        <table>
+          <tr>
+            <th colspan="3" class="ch">CALL</th>
+            <th class="sh">DELTA</th>
+            <th colspan="3" class="ph">PUT</th>
+          </tr>
+          <tr>
+            <th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th>
+            <th class="sh"></th>
+            <th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th>
+          </tr>
+          ${rows}
+        </table>
+      </div>
+    </div>`;
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+startClock();
+pollStatus();
+pollingInterval = setInterval(pollStatus, 8000); // refresh every 8s
+</script>
+</body>
+</html>

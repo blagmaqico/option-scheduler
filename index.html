@@ -589,16 +589,22 @@ function buildTable(ticker, data, expiry) {
   const rows = deltas.map(d => {
     const c = calls.find(x => x.targetDelta === d) || {};
     const p = puts.find(x => x.targetDelta === d) || {};
+    const fiv = v => v != null ? (v*100).toFixed(1)+'%' : '—';
+    const foi = v => v != null ? v.toLocaleString() : '—';
     return `<tr>
       <td class="call">${c.strike ? '$'+c.strike.toFixed(2) : '—'}</td>
       <td class="call">${fv(c.bid)}</td>
       <td class="call">${fv(c.ask)}</td>
       <td class="call" style="color:var(--muted)">${fv(c.lastPrice)}</td>
+      <td class="call" style="color:var(--muted);font-size:11px">${fiv(c.iv)}</td>
+      <td class="call" style="color:var(--muted);font-size:11px">${foi(c.oi)}</td>
       <td class="mid"><span class="dbadge">Δ${d.toFixed(2)}</span></td>
       <td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
       <td class="put">${fv(p.bid)}</td>
       <td class="put">${fv(p.ask)}</td>
       <td class="put" style="color:var(--muted)">${fv(p.lastPrice)}</td>
+      <td class="put" style="color:var(--muted);font-size:11px">${fiv(p.iv)}</td>
+      <td class="put" style="color:var(--muted);font-size:11px">${foi(p.oi)}</td>
     </tr>`;
   }).join('');
 
@@ -611,14 +617,14 @@ function buildTable(ticker, data, expiry) {
       <div class="opt-table-wrap">
         <table>
           <tr>
-            <th colspan="4" class="ch">CALL</th>
+            <th colspan="6" class="ch">CALL</th>
             <th class="sh">DELTA</th>
-            <th colspan="4" class="ph">PUT</th>
+            <th colspan="6" class="ph">PUT</th>
           </tr>
           <tr>
-            <th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th><th class="ch">LAST</th>
+            <th class="ch">STRIKE</th><th class="ch">BID</th><th class="ch">ASK</th><th class="ch">LAST</th><th class="ch">IV</th><th class="ch">OI</th>
             <th class="sh"></th>
-            <th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th><th class="ph">LAST</th>
+            <th class="ph">STRIKE</th><th class="ph">BID</th><th class="ph">ASK</th><th class="ph">LAST</th><th class="ph">IV</th><th class="ph">OI</th>
           </tr>
           ${rows}
         </table>

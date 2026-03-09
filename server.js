@@ -153,15 +153,26 @@ async function fetchOptionChain(ticker, expiryDate) {
       const chain0 = baseJson?.optionChain?.result?.[0];
       if (!chain0) throw new Error('Brak danych option chain');
 
-      // Step 2: find closest available expiration date to requested date
+      // Step 2: find best expiration date
       const availableDates = chain0.expirationDates || [];
-      let chosenTs = availableDates[0] || null;
-      if (ts && availableDates.length > 0) {
-        chosenTs = availableDates.reduce((best, d) =>
+      const nowTs = Math.floor(Date.now() / 1000);
+      // Filter out already expired dates
+      const futureDates = availableDates.filter(d => d >= nowTs - 86400);
+      let chosenTs = futureDates[0] || null;
+      if (ts && futureDates.length > 0) {
+        // If configured date is still valid, use closest to it
+        chosenTs = futureDates.reduce((best, d) =>
           Math.abs(d - ts) < Math.abs(best - ts) ? d : best
-        , availableDates[0]);
+        , futureDates[0]);
       }
-      addLog(`Wybrana data exp: ${chosenTs ? new Date(chosenTs*1000).toISOString().slice(0,10) : 'brak'}`, 'info');
+      const chosenDate = chosenTs ? new Date(chosenTs*1000).toISOString().slice(0,10) : 'brak';
+      addLog(`Wybrana data exp: ${chosenDate}`, 'info');
+      // Auto-update config if date changed
+      if (chosenTs && chosenTs !== ts) {
+        config.expiryDate = chosenDate;
+        saveConfig(config).catch(() => {});
+        addLog(`Auto-aktualizacja daty exp: ${chosenDate}`, 'ok');
+      }
 
       // Step 3: fetch with correct date timestamp from Yahoo
       const finalUrl = `${baseUrl}${chosenTs ? '&date='+chosenTs : ''}`;
@@ -227,7 +238,9 @@ function selectByDelta(options, deltas, underlyingPrice, type) {
     // Próbuj wszystkich możliwych nazw pola lastPrice w Yahoo Finance
     const lastRaw = opt.lastPrice ?? opt.last ?? opt.lastTradedPrice ?? opt.regularMarketPrice ?? opt.mark ?? null;
     const last = (lastRaw && lastRaw > 0) ? lastRaw : null;
-    return { ...opt, approxDelta: Math.abs(d), lastPrice: last };
+    const iv = (opt.impliedVolatility && opt.impliedVolatility > 0) ? opt.impliedVolatility : null;
+    const oi = opt.openInterest ?? null;
+    return { ...opt, approxDelta: Math.abs(d), lastPrice: last, iv, oi };
   });
 
   const result = [];
@@ -303,20 +316,24 @@ function buildEmailHtml(results, scheduledTime) {
     }
     html += `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
       <tr>
-        <th colspan="4" style="background:#0d1a14;color:#00c98a;padding:10px;text-align:center;border:1px solid #1f2530;">CALL</th>
+        <th colspan="6" style="background:#0d1a14;color:#00c98a;padding:10px;text-align:center;border:1px solid #1f2530;">CALL</th>
         <th style="background:#111318;color:#e8edf5;padding:10px;text-align:center;border:1px solid #1f2530;">DELTA</th>
-        <th colspan="4" style="background:#1a0d12;color:#ff4d6d;padding:10px;text-align:center;border:1px solid #1f2530;">PUT</th>
+        <th colspan="6" style="background:#1a0d12;color:#ff4d6d;padding:10px;text-align:center;border:1px solid #1f2530;">PUT</th>
       </tr>
       <tr>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">STRIKE</th>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">BID</th>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">ASK</th>
         <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">LAST</th>
+        <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">IV</th>
+        <th style="background:#111318;color:#00c98a;padding:8px 14px;border:1px solid #1f2530;text-align:center;">OI</th>
         <th style="background:#111318;padding:8px;border:1px solid #1f2530;"></th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">STRIKE</th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">BID</th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">ASK</th>
         <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">LAST</th>
+        <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">IV</th>
+        <th style="background:#111318;color:#ff4d6d;padding:8px 14px;border:1px solid #1f2530;text-align:center;">OI</th>
       </tr>`;
     for (const d of deltas) {
       const c = data.calls.find(x => x.targetDelta === d) || {};
@@ -327,6 +344,8 @@ function buildEmailHtml(results, scheduledTime) {
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(c.bid)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(c.ask)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#aaa;">${fv(c.lastPrice)}</td>
+        <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${c.iv ? (c.iv*100).toFixed(1)+'%' : '—'}</td>
+        <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${c.oi != null ? c.oi.toLocaleString() : '—'}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;background:#111318;">
           <span style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:4px;padding:2px 8px;color:#00e5a0;font-size:12px;">Δ${d.toFixed(2)}</span>
         </td>
@@ -334,6 +353,8 @@ function buildEmailHtml(results, scheduledTime) {
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(p.bid)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;">${fv(p.ask)}</td>
         <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#aaa;">${fv(p.lastPrice)}</td>
+        <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${p.iv ? (p.iv*100).toFixed(1)+'%' : '—'}</td>
+        <td style="padding:9px 14px;border:1px solid #1f2530;text-align:center;color:#888;font-size:11px;">${p.oi != null ? p.oi.toLocaleString() : '—'}</td>
       </tr>`;
     }
     html += `</table></div>`;

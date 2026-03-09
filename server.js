@@ -87,20 +87,23 @@ async function fetchOptionChain(ticker, expiryDate) {
   const ts = expiryDate ? Math.floor(new Date(expiryDate).getTime() / 1000) : null;
 
   if (rapidApiKey) {
-    // Use RapidAPI Yahoo Finance (reliable, no blocks)
+    // Use RapidAPI Yahoo Finance
     try {
       addLog(`RapidAPI fetch: ${ticker}`, 'info');
-      const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v2/get-options?symbol=${ticker}${ts ? '&date='+ts : ''}`;
+      // Correct endpoint for options chain
+      const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}${ts ? '&date='+ts : ''}`;
       const resp = await fetch(url, {
         headers: {
           'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
           'x-rapidapi-key': rapidApiKey
         }
       });
-      if (!resp.ok) throw new Error(`RapidAPI HTTP ${resp.status}`);
-      const json = await resp.json();
+      const text = await resp.text();
+      if (!resp.ok) throw new Error(`RapidAPI HTTP ${resp.status}: ${text.slice(0,200)}`);
+      let json;
+      try { json = JSON.parse(text); } catch(e) { throw new Error(`JSON parse: ${text.slice(0,200)}`); }
       const chain = json?.optionChain?.result?.[0];
-      if (!chain) throw new Error('Brak danych option chain');
+      if (!chain) throw new Error(`Brak option chain. Keys: ${Object.keys(json||{}).join(',')}`);
       const opts = chain.options?.[0];
       if (!opts) throw new Error('Brak opcji dla tej daty');
       const underlyingPrice = chain.quote?.regularMarketPrice || null;

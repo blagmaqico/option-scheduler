@@ -174,8 +174,12 @@ async function fetchOptionChain(ticker, expiryDate) {
       if (!opts) throw new Error('Brak opcji dla wybranej daty');
 
       const underlyingPrice = chain.quote?.regularMarketPrice || null;
-      const calls = selectByDelta(opts.calls || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'call');
-      const puts  = selectByDelta(opts.puts  || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'put');
+      // RapidAPI returns straddles format: [{strike, call:{...}, put:{...}}]
+      const straddles = opts.straddles || [];
+      const rawCalls = straddles.filter(s => s.call).map(s => s.call);
+      const rawPuts  = straddles.filter(s => s.put).map(s => s.put);
+      const calls = selectByDelta(rawCalls, [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'call');
+      const puts  = selectByDelta(rawPuts,  [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'put');
       addLog(`RapidAPI OK: ${ticker} $${underlyingPrice?.toFixed(2)||'?'}`, 'ok');
       return { calls, puts, underlyingPrice, expirationDate: opts.expirationDate };
     } catch(e) {

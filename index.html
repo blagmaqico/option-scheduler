@@ -505,7 +505,13 @@ function renderChips() {
 
 // ─── TIMES ────────────────────────────────────────────────────────────────
 function addTime() {
-  times.push('09:00'); renderTimes(); saveConfig();
+  // Ask user for time
+  const t = prompt('Wpisz godzinę (format HH:MM, np. 15:30):');
+  if (!t) return;
+  const valid = /^([01]\d|2[0-3]):[0-5]\d$/.test(t.trim());
+  if (!valid) { alert('Nieprawidłowy format. Wpisz np. 15:30'); return; }
+  if (times.includes(t.trim())) { alert('Ta godzina już istnieje'); return; }
+  times.push(t.trim()); renderTimes(); saveConfig();
 }
 
 function removeTime(i) {

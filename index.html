@@ -457,27 +457,28 @@ function renderLogs(logs) {
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────
 async function saveConfig() {
+  const passVal = document.getElementById('cfg-pass').value.trim();
   const body = {
     emailService: document.getElementById('cfg-service').value,
     emailUser: document.getElementById('cfg-user').value.trim(),
-    emailPass: document.getElementById('cfg-pass').value || '••••••••',
     emailTo: document.getElementById('cfg-to').value.trim(),
     expiryDate: document.getElementById('cfg-expiry').value,
     tickers,
     times
   };
+  // Tylko wysyłaj haslo jesli uzytkownik je wpisal
+  if (passVal && passVal !== '••••••••') body.emailPass = passVal;
   await api('/api/config', 'POST', body);
   document.getElementById('cfg-pass').value = '';
   await pollStatus();
 }
 
 async function testEmail() {
-  await saveConfig();
   const btn = event.target;
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Wysyłam...';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Wysylam...';
   const r = await api('/api/test-email', 'POST');
-  btn.disabled = false; btn.textContent = r.ok ? '✅ Wysłano!' : '❌ Błąd — sprawdź log';
-  setTimeout(() => btn.textContent = '📧 Testowy email', 3000);
+  btn.disabled = false; btn.textContent = r.ok ? 'Wyslano!' : 'Blad - sprawdz log';
+  setTimeout(() => btn.textContent = 'Testowy email', 3000);
 }
 
 // ─── TICKERS ─────────────────────────────────────────────────────────────

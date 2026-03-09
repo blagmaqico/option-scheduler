@@ -457,22 +457,36 @@ app.get('/api/debug-option', async (req, res) => {
   try {
     const ticker = config.tickers[0] || 'SPY';
     const rapidApiKey = process.env.RAPIDAPI_KEY;
+    const headers = {
+      'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
+      'x-rapidapi-key': rapidApiKey
+    };
+    const baseUrl = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}`;
+
+    // Step 1: get available dates
+    const baseResp = await fetch(baseUrl, { headers });
+    const baseJson = await baseResp.json();
+    const chain0 = baseJson?.optionChain?.result?.[0];
+    const availableDates = chain0?.expirationDates || [];
+
+    // Step 2: pick closest date to configured expiry
     const ts = config.expiryDate ? Math.floor(new Date(config.expiryDate).getTime() / 1000) : null;
-    const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}${ts ? '&date='+ts : ''}`;
-    const resp = await fetch(url, {
-      headers: {
-        'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
-        'x-rapidapi-key': rapidApiKey
-      }
-    });
-    const json = await resp.json();
-    const result = json?.optionChain?.result?.[0];
-    const opts = result?.options?.[0];
+    let chosenTs = availableDates[0] || null;
+    if (ts && availableDates.length > 0) {
+      chosenTs = availableDates.reduce((best, d) =>
+        Math.abs(d - ts) < Math.abs(best - ts) ? d : best
+      , availableDates[0]);
+    }
+
+    // Step 3: fetch with correct date
+    const finalResp = await fetch(`${baseUrl}${chosenTs ? '&date='+chosenTs : ''}`, { headers });
+    const finalJson = await finalResp.json();
+    const opts = finalJson?.optionChain?.result?.[0]?.options?.[0];
     const sample = opts?.calls?.[0] || opts?.puts?.[0];
-    const ts2 = config.expiryDate ? Math.floor(new Date(config.expiryDate).getTime() / 1000) : null;
+
     res.json({
-      usedUrl: `...?symbol=${config.tickers[0]}&date=${ts2}`,
-      expiryDate: config.expiryDate,
+      availableDates: availableDates.map(d => new Date(d*1000).toISOString().slice(0,10)),
+      chosenDate: chosenTs ? new Date(chosenTs*1000).toISOString().slice(0,10) : null,
       callsCount: opts?.calls?.length || 0,
       putsCount: opts?.puts?.length || 0,
       allFields: sample ? Object.keys(sample) : [],

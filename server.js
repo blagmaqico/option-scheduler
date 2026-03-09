@@ -453,7 +453,8 @@ app.get('/api/debug-option', async (req, res) => {
   try {
     const ticker = config.tickers[0] || 'SPY';
     const rapidApiKey = process.env.RAPIDAPI_KEY;
-    const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}`;
+    const ts = config.expiryDate ? Math.floor(new Date(config.expiryDate).getTime() / 1000) : null;
+    const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}${ts ? '&date='+ts : ''}`;
     const resp = await fetch(url, {
       headers: {
         'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
@@ -465,13 +466,7 @@ app.get('/api/debug-option', async (req, res) => {
     const sample = opts?.calls?.[0] || opts?.puts?.[0];
     res.json({
       allFields: sample ? Object.keys(sample) : [],
-      sampleValues: sample ? {
-        strike: sample.strike,
-        lastPrice: sample.lastPrice,
-        bid: sample.bid,
-        ask: sample.ask,
-        impliedVolatility: sample.impliedVolatility,
-      } : null
+      sampleValues: sample || null
     });
   } catch(e) {
     res.json({ error: e.message });

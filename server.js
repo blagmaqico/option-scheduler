@@ -448,6 +448,36 @@ app.post('/api/test-email', async (req, res) => {
 app.get('/health', (req, res) => res.send('OK'));
 
 const PORT = process.env.PORT || 3000;
+// Debug endpoint - zwraca surowe dane pierwszej opcji
+app.get('/api/debug-option', async (req, res) => {
+  try {
+    const ticker = config.tickers[0] || 'SPY';
+    const rapidApiKey = process.env.RAPIDAPI_KEY;
+    const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v3/get-options?symbol=${ticker}`;
+    const resp = await fetch(url, {
+      headers: {
+        'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
+        'x-rapidapi-key': rapidApiKey
+      }
+    });
+    const json = await resp.json();
+    const opts = json?.optionChain?.result?.[0]?.options?.[0];
+    const sample = opts?.calls?.[0] || opts?.puts?.[0];
+    res.json({
+      allFields: sample ? Object.keys(sample) : [],
+      sampleValues: sample ? {
+        strike: sample.strike,
+        lastPrice: sample.lastPrice,
+        bid: sample.bid,
+        ask: sample.ask,
+        impliedVolatility: sample.impliedVolatility,
+      } : null
+    });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   addLog(`Serwer na porcie ${PORT}`, 'ok');
   addLog(`Email user: ${config.emailUser || 'BRAK — ustaw EMAIL_USER w Render Environment'}`, config.emailUser ? 'ok' : 'warn');

@@ -148,35 +148,60 @@ async function fetchOptionChain(ticker, expiryDate) {
 function selectByDelta(options, deltas, underlyingPrice, type) {
   if (!options.length) return [];
   const sorted = [...options].sort((a, b) => a.strike - b.strike);
+
+  // Assign BS-approximated delta to every option
+  const withDelta = sorted.map(opt => {
+    let d = opt.greeks?.delta;
+    if (d == null) d = bsDelta(opt.strike, underlyingPrice, opt.impliedVolatility, type);
+    return { ...opt, approxDelta: Math.abs(d) };
+  });
+
   const result = [];
   for (const targetDelta of deltas) {
+    // Find option whose approxDelta is closest to target
     let best = null, bestDiff = Infinity;
-    for (const opt of sorted) {
-      let d = opt.greeks?.delta;
-      if (d == null && underlyingPrice) d = approximateDelta(opt.strike, underlyingPrice, type);
-      if (d == null) {
-        const idx = sorted.indexOf(opt);
-        d = type === 'call' ? 1 - idx / sorted.length : idx / sorted.length;
-      }
-      const diff = Math.abs(Math.abs(d) - targetDelta);
-      if (diff < bestDiff) { bestDiff = diff; best = { ...opt, approxDelta: d, targetDelta }; }
+    for (const opt of withDelta) {
+      const diff = Math.abs(opt.approxDelta - targetDelta);
+      if (diff < bestDiff) { bestDiff = diff; best = { ...opt, targetDelta }; }
     }
     if (best && !result.find(r => r.strike === best.strike)) result.push(best);
   }
   return result.sort((a, b) => b.targetDelta - a.targetDelta);
 }
 
-function approximateDelta(strike, underlying, type) {
-  const m = underlying / strike;
-  if (type === 'call') {
-    if (m > 1.05) return 0.75; if (m > 1.02) return 0.60;
-    if (m > 0.99) return 0.50; if (m > 0.96) return 0.38;
-    if (m > 0.93) return 0.27; return 0.15;
-  } else {
-    if (m < 0.95) return 0.75; if (m < 0.98) return 0.60;
-    if (m < 1.01) return 0.50; if (m < 1.04) return 0.38;
-    if (m < 1.07) return 0.27; return 0.15;
-  }
+// Black-Scholes delta approximation using IV from Yahoo
+function bsDelta(strike, spot, iv, type) {
+  if (!spot || !strike) return type === 'call' ? 0.5 : 0.5;
+
+  // Use IV from Yahoo if available, otherwise estimate from moneyness
+  const sigma = (iv && iv > 0 && iv < 5) ? iv : estimateIV(strike, spot);
+  const T = 30 / 365; // assume ~30 days to expiry as fallback
+  const r = 0.05; // risk-free rate
+
+  const d1 = (Math.log(spot / strike) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+  const nd1 = normalCDF(d1);
+
+  return type === 'call' ? nd1 : 1 - nd1;
+}
+
+function estimateIV(strike, spot) {
+  // Rough IV estimate based on moneyness — typical for SPY/QQQ
+  const m = Math.abs(Math.log(spot / strike));
+  if (m < 0.01) return 0.15;
+  if (m < 0.02) return 0.16;
+  if (m < 0.04) return 0.18;
+  if (m < 0.06) return 0.20;
+  return 0.22;
+}
+
+function normalCDF(x) {
+  // Abramowitz & Stegun approximation
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const t = 1.0 / (1.0 + p * x);
+  const y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-x*x);
+  return 0.5 * (1.0 + sign * y);
 }
 
 // ─── EMAIL (Resend API - HTTP port 443, works on Render free) ────────────────

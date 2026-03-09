@@ -2,10 +2,10 @@
   "name": "option-chain-scheduler",
   "version": "1.0.0",
   "description": "Automated option chain email scheduler",
-  "main": "src/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node src/server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",

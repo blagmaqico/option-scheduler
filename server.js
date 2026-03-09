@@ -83,62 +83,63 @@ function stopAllCrons() {
 
 // ─── YAHOO FINANCE ───────────────────────────────────────────────────────────
 async function fetchOptionChain(ticker, expiryDate) {
+  const rapidApiKey = process.env.RAPIDAPI_KEY;
   const ts = expiryDate ? Math.floor(new Date(expiryDate).getTime() / 1000) : null;
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/options/${ticker}${ts ? '?date='+ts : ''}`;
 
-  // Try multiple approaches to bypass Yahoo 401
-  const attempts = [
-    // 1. Direct with cookie/crumb workaround headers
-    () => fetch(yahooUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Origin': 'https://finance.yahoo.com',
-        'Referer': 'https://finance.yahoo.com/',
-        'Cookie': 'B=abc; YFC=1',
-      }
-    }),
-    // 2. Via corsproxy.io
-    () => fetch(`https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    }),
-    // 3. Via allorigins
-    () => fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`).then(async r => {
-      if (!r.ok) throw new Error(`allorigins HTTP ${r.status}`);
-      const j = await r.json();
-      // allorigins wraps in {contents: "..."}
-      return { ok: true, json: async () => JSON.parse(j.contents) };
-    }),
-    // 4. query2 direct
-    () => fetch(`https://query2.finance.yahoo.com/v8/finance/options/${ticker}${ts ? '?date='+ts : ''}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://finance.yahoo.com/',
-      }
-    }),
-  ];
-
-  let lastErr;
-  for (let i = 0; i < attempts.length; i++) {
+  if (rapidApiKey) {
+    // Use RapidAPI Yahoo Finance (reliable, no blocks)
     try {
-      addLog(`Yahoo attempt ${i+1} for ${ticker}...`, 'info');
-      const resp = await attempts[i]();
-      if (!resp.ok) { lastErr = new Error(`HTTP ${resp.status}`); continue; }
+      addLog(`RapidAPI fetch: ${ticker}`, 'info');
+      const url = `https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/v2/get-options?symbol=${ticker}${ts ? '&date='+ts : ''}`;
+      const resp = await fetch(url, {
+        headers: {
+          'x-rapidapi-host': 'apidojo-yahoo-finance-v1.p.rapidapi.com',
+          'x-rapidapi-key': rapidApiKey
+        }
+      });
+      if (!resp.ok) throw new Error(`RapidAPI HTTP ${resp.status}`);
       const json = await resp.json();
       const chain = json?.optionChain?.result?.[0];
-      if (!chain) { lastErr = new Error('Brak danych option chain'); continue; }
+      if (!chain) throw new Error('Brak danych option chain');
       const opts = chain.options?.[0];
-      if (!opts) { lastErr = new Error('Brak opcji dla tej daty'); continue; }
+      if (!opts) throw new Error('Brak opcji dla tej daty');
       const underlyingPrice = chain.quote?.regularMarketPrice || null;
       const calls = selectByDelta(opts.calls || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'call');
       const puts  = selectByDelta(opts.puts  || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'put');
-      addLog(`Yahoo attempt ${i+1} succeeded for ${ticker}`, 'ok');
+      addLog(`RapidAPI OK: ${ticker} $${underlyingPrice?.toFixed(2)||'?'}`, 'ok');
       return { calls, puts, underlyingPrice, expirationDate: opts.expirationDate };
-    } catch(e) { lastErr = e; addLog(`Attempt ${i+1} failed: ${e.message}`, 'warn'); }
+    } catch(e) {
+      addLog(`RapidAPI error: ${e.message} — próbuję bezpośrednio`, 'warn');
+    }
   }
-  throw lastErr || new Error('Wszystkie metody Yahoo zawiodły');
+
+  // Fallback: direct Yahoo
+  const urls = [
+    `https://query2.finance.yahoo.com/v8/finance/options/${ticker}${ts ? '?date='+ts : ''}`,
+    `https://query1.finance.yahoo.com/v8/finance/options/${ticker}${ts ? '?date='+ts : ''}`,
+  ];
+  let lastErr;
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36',
+          'Referer': 'https://finance.yahoo.com/',
+        }
+      });
+      if (!resp.ok) { lastErr = new Error(`HTTP ${resp.status}`); continue; }
+      const json = await resp.json();
+      const chain = json?.optionChain?.result?.[0];
+      if (!chain) { lastErr = new Error('Brak danych'); continue; }
+      const opts = chain.options?.[0];
+      if (!opts) { lastErr = new Error('Brak opcji'); continue; }
+      const underlyingPrice = chain.quote?.regularMarketPrice || null;
+      const calls = selectByDelta(opts.calls || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'call');
+      const puts  = selectByDelta(opts.puts  || [], [0.50, 0.40, 0.30, 0.20], underlyingPrice, 'put');
+      return { calls, puts, underlyingPrice, expirationDate: opts.expirationDate };
+    } catch(e) { lastErr = e; }
+  }
+  throw lastErr || new Error('Wszystkie metody zawiodły');
 }
 
 function selectByDelta(options, deltas, underlyingPrice, type) {

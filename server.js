@@ -479,18 +479,23 @@ app.get('/api/debug-option', async (req, res) => {
     }
 
     // Step 3: fetch with correct date
-    const finalResp = await fetch(`${baseUrl}${chosenTs ? '&date='+chosenTs : ''}`, { headers });
+    const finalUrl = `${baseUrl}${chosenTs ? '&date='+chosenTs : ''}`;
+    const finalResp = await fetch(finalUrl, { headers });
     const finalJson = await finalResp.json();
-    const opts = finalJson?.optionChain?.result?.[0]?.options?.[0];
+    const result3 = finalJson?.optionChain?.result?.[0];
+    const opts = result3?.options?.[0];
     const sample = opts?.calls?.[0] || opts?.puts?.[0];
 
     res.json({
       availableDates: availableDates.map(d => new Date(d*1000).toISOString().slice(0,10)),
       chosenDate: chosenTs ? new Date(chosenTs*1000).toISOString().slice(0,10) : null,
+      finalUrl,
+      optionsLength: result3?.options?.length,
       callsCount: opts?.calls?.length || 0,
       putsCount: opts?.puts?.length || 0,
       allFields: sample ? Object.keys(sample) : [],
-      sampleValues: sample || null
+      sampleValues: sample || null,
+      rawOptionsKeys: result3 ? Object.keys(result3) : []
     });
   } catch(e) {
     res.json({ error: e.message });

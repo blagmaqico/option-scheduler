@@ -213,12 +213,9 @@ function selectByDelta(options, deltas, underlyingPrice, type) {
   const withDelta = sorted.map(opt => {
     let d = opt.greeks?.delta;
     if (d == null) d = bsDelta(opt.strike, underlyingPrice, opt.impliedVolatility, type);
-    // lastPrice: use lastPrice field, fallback to regularMarketPrice
-    // Yahoo Finance zwraca lastPrice jako pole opcji (ostatnia transakcja)
-    // Gdy giełda zamknięta lastPrice może być 0 lub undefined
-    const last = (opt.lastPrice && opt.lastPrice > 0) ? opt.lastPrice
-               : (opt.last && opt.last > 0) ? opt.last
-               : null;
+    // Próbuj wszystkich możliwych nazw pola lastPrice w Yahoo Finance
+    const lastRaw = opt.lastPrice ?? opt.last ?? opt.lastTradedPrice ?? opt.regularMarketPrice ?? opt.mark ?? null;
+    const last = (lastRaw && lastRaw > 0) ? lastRaw : null;
     return { ...opt, approxDelta: Math.abs(d), lastPrice: last };
   });
 
@@ -462,9 +459,15 @@ app.get('/api/debug-option', async (req, res) => {
       }
     });
     const json = await resp.json();
-    const opts = json?.optionChain?.result?.[0]?.options?.[0];
+    const result = json?.optionChain?.result?.[0];
+    const opts = result?.options?.[0];
     const sample = opts?.calls?.[0] || opts?.puts?.[0];
+    const ts2 = config.expiryDate ? Math.floor(new Date(config.expiryDate).getTime() / 1000) : null;
     res.json({
+      usedUrl: `...?symbol=${config.tickers[0]}&date=${ts2}`,
+      expiryDate: config.expiryDate,
+      callsCount: opts?.calls?.length || 0,
+      putsCount: opts?.puts?.length || 0,
       allFields: sample ? Object.keys(sample) : [],
       sampleValues: sample || null
     });

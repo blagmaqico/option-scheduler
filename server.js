@@ -157,9 +157,11 @@ function createTransporter() {
   if (config.emailService === 'gmail') {
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user: config.emailUser, pass: config.emailPass }
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: { user: config.emailUser, pass: config.emailPass },
+      tls: { rejectUnauthorized: false }
     });
   } else {
     return nodemailer.createTransport({

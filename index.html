@@ -602,7 +602,10 @@ function buildTable(ticker, data, expiry) {
       <td class="call" style="color:var(--muted)">${fv(c.lastPrice)}</td>
       <td class="call" style="color:var(--muted);font-size:11px">${fiv(c.iv)}</td>
       <td class="call" style="color:var(--muted);font-size:11px">${foi(c.oi)}</td>
-      <td class="mid"><span class="dbadge">Δ${cd.toFixed(2)}<br><span style="font-size:10px;opacity:0.6">Δ${pd.toFixed(2)}</span></span></td>
+      <td class="mid">
+        <span class="dbadge" style="background:rgba(0,229,160,0.15);border-color:rgba(0,229,160,0.4);color:#00e5a0;display:block;margin-bottom:4px;">Δ${cd.toFixed(2)}</span>
+        <span class="dbadge" style="background:rgba(255,77,109,0.15);border-color:rgba(255,77,109,0.4);color:#ff4d6d;display:block;">Δ${pd.toFixed(2)}</span>
+      </td>
       <td class="put">${p.strike ? '$'+p.strike.toFixed(2) : '—'}</td>
       <td class="put">${fv(p.bid)}</td>
       <td class="put">${fv(p.ask)}</td>

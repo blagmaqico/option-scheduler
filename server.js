@@ -541,4 +541,16 @@ app.listen(PORT, () => {
   addLog(`Email user: ${config.emailUser || 'BRAK — ustaw EMAIL_USER w Render Environment'}`, config.emailUser ? 'ok' : 'warn');
   addLog(`Email to: ${config.emailTo || 'BRAK — ustaw EMAIL_TO w Render Environment'}`, config.emailTo ? 'ok' : 'warn');
   if (config.schedulerOn) startAllCrons();
+
+  // SELF-PING — keep-alive dla Render free tier
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  setInterval(async () => {
+    try {
+      const r = await fetch(`${SELF_URL}/api/status`);
+      addLog(`Keep-alive ping OK (${r.status})`, 'info');
+    } catch (e) {
+      addLog(`Keep-alive ping failed: ${e.message}`, 'warn');
+    }
+  }, 10 * 60 * 1000);
+  addLog(`Keep-alive aktywny → ping co 10 min (${SELF_URL})`, 'ok');
 });

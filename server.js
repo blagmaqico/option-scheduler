@@ -290,9 +290,28 @@ function normalCDF(x) {
   return 0.5 * (1.0 + sign * y);
 }
 
+// ─── VIX ──────────────────────────────────────────────────────────────────────
+async function fetchVix() {
+  try {
+    const url = 'https://apidojo-yahoo-finance-v1.p.rapidapi.com/market/v2/get-quotes?region=US&symbols=%5EVIX';
+    const resp = await fetch(url, {
+      headers: {
+        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || '',
+        'X-RapidAPI-Host': 'apidojo-yahoo-finance-v1.p.rapidapi.com'
+      }
+    });
+    const json = await resp.json();
+    const price = json?.quoteResponse?.result?.[0]?.regularMarketPrice;
+    return price ? parseFloat(price.toFixed(2)) : null;
+  } catch(e) {
+    addLog(`VIX fetch error: ${e.message}`, 'warn');
+    return null;
+  }
+}
+
 // ─── EMAIL (Resend API - HTTP port 443, works on Render free) ────────────────
 
-function buildEmailHtml(results, scheduledTime) {
+function buildEmailHtml(results, scheduledTime, vix = null) {
   const now = moment().tz('Europe/Warsaw').format('DD.MM.YYYY HH:mm:ss');
   const deltas = [0.50, 0.40, 0.30, 0.20];
 
@@ -302,6 +321,7 @@ function buildEmailHtml(results, scheduledTime) {
       <p style="color:#5a6478;margin:8px 0 0;font-size:13px;">
         Data: ${now} (CET/CEST) &nbsp;|&nbsp; Godzina: <strong style="color:#fff">${scheduledTime}</strong>
         &nbsp;|&nbsp; Expiration: <strong style="color:#fff">${config.expiryDate}</strong>
+        ${vix != null ? `&nbsp;|&nbsp; VIX: <strong style="color:${vix >= 20 ? '#ff4d6d' : vix >= 15 ? '#ffaa44' : '#00e5a0'}">${vix.toFixed(2)}</strong>` : ''}
       </p>
     </div>`;
 
@@ -373,7 +393,7 @@ function buildEmailHtml(results, scheduledTime) {
   return html;
 }
 
-async function sendEmail(scheduledTime, results) {
+async function sendEmail(scheduledTime, results, vix = null) {
   const resendKey = process.env.RESEND_API_KEY || config.resendApiKey;
   if (!resendKey) {
     addLog('Brak RESEND_API_KEY — ustaw w Render Environment', 'err');
@@ -384,7 +404,7 @@ async function sendEmail(scheduledTime, results) {
     return false;
   }
   addLog(`Wysyłam email → ${config.emailTo}`, 'info');
-  const html = buildEmailHtml(results, scheduledTime);
+  const html = buildEmailHtml(results, scheduledTime, vix);
   const date = moment().tz('Europe/Warsaw').format('DD.MM.YYYY');
   try {
     const resp = await fetch('https://api.resend.com/emails', {
@@ -424,11 +444,18 @@ async function runFetchAndSend(scheduledTime) {
       results.push({ ticker, data: null, error: e.message });
     }
   }
-  await sendEmail(scheduledTime, results);
+  const vix = await fetchVix();
+  if (vix != null) addLog(`VIX: ${vix.toFixed(2)}`, 'info');
+  await sendEmail(scheduledTime, results, vix);
   return results;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
+app.get('/api/vix', async (req, res) => {
+  const vix = await fetchVix();
+  res.json({ ok: true, vix });
+});
+
 app.get('/api/status', (req, res) => {
   res.json({
     config: { ...config, emailPass: config.emailPass ? '••••••••' : '' },

@@ -584,6 +584,22 @@ async function fetchPreview() {
   const expiry = document.getElementById('cfg-expiry').value;
   let html = '';
 
+  // Fetch VIX in parallel
+  let vix = null;
+  try {
+    const vr = await api('/api/vix', 'GET');
+    if (vr.ok) vix = vr.vix;
+  } catch(e) {}
+
+  if (vix != null) {
+    const col = vix >= 20 ? 'var(--put)' : vix >= 15 ? '#ffaa44' : 'var(--a)';
+    html += `<div style="margin-bottom:16px;padding:10px 16px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;font-size:13px;display:flex;align-items:center;gap:12px;">
+      <span style="color:var(--muted);letter-spacing:1px;font-size:11px;font-weight:700;">VIX</span>
+      <span style="color:${col};font-size:22px;font-weight:700;">${vix.toFixed(2)}</span>
+      <span style="color:var(--muted);font-size:11px;">${vix >= 20 ? '🔴 Podwyższony strach' : vix >= 15 ? '🟡 Umiarkowany' : '🟢 Spokój'}</span>
+    </div>`;
+  }
+
   for (const ticker of tickers) {
     const r = await api('/api/preview', 'POST', { ticker, expiryDate: expiry });
     if (!r.ok) {

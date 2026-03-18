@@ -112,9 +112,27 @@ function buildCronExpr(timeStr) {
   return `${parseInt(m)} ${parseInt(h)} * * 1-5`;
 }
 
+let cronRestartPending = false;
+let cronRestartTimer = null;
+
 function startAllCrons() {
+  // Debounce — jeśli wywołane wielokrotnie z rzędu, czeka 300ms i odpala raz
+  if (cronRestartTimer) clearTimeout(cronRestartTimer);
+  cronRestartTimer = setTimeout(() => {
+    cronRestartTimer = null;
+    _doStartAllCrons();
+  }, 300);
+}
+
+function _doStartAllCrons() {
   stopAllCrons();
   if (!config.schedulerOn) return;
+  // Deduplikacja czasów
+  const uniqueTimes = [...new Set(config.times)];
+  if (uniqueTimes.length !== config.times.length) {
+    addLog(`Usunięto duplikaty cronów (${config.times.length} → ${uniqueTimes.length})`, 'warn');
+    config.times = uniqueTimes;
+  }
   for (const t of config.times) {
     const expr = buildCronExpr(t);
     addLog(`Cron: "${t}" → ${expr}`, 'info');
@@ -128,7 +146,10 @@ function startAllCrons() {
 }
 
 function stopAllCrons() {
-  for (const { job } of activeCrons) { try { job.destroy(); } catch(e) {} }
+  for (const { job } of activeCrons) {
+    try { job.stop(); } catch(e) {}
+    try { job.destroy(); } catch(e) {}
+  }
   activeCrons = [];
 }
 
